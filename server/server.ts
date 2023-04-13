@@ -15,7 +15,7 @@ async function RunServer() {
   const importCrawlerRouter = require('../routes/CrawlerRouter');
   app.use('/api/crawl', importCrawlerRouter);
 
-  const port = process.env.PORT || 8080;
+  const port = process.env.SERVER_PORT || 8000;
   app.get('/', (req: any, res: any) => {
     res.status(200).send('Hello World!');
   });
