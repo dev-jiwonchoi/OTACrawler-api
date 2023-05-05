@@ -1,8 +1,8 @@
-const { Browser } = require('puppeteer');
+const { Page } = require('puppeteer');
+const { Cluster } = require('puppeteer-cluster');
 const puppeteer = require('puppeteer-extra'); // For puppeteer stealth below
 const StealthPlugin = require('puppeteer-extra-plugin-stealth'); // For browser evasion
 const hotelOTAEntityObject: object = require('../entities/HotelOTAEntity');
-// try puppeteer-cluster!!
 puppeteer.use(StealthPlugin());
 
 const hotelOTADataElementClassNameObject: { [key: string]: Array<string> } = {
@@ -16,50 +16,51 @@ async function getCrawlingData(request: any, response: any) {
   const checkOutDate = request.params.checkOutDate;
   const numberOfNights = request.params.numberOfNights;
 
-  const browser: typeof Browser = await puppeteer.launch({
-    headless: true, // Does not show browser if true
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  const cluster: typeof Cluster = await Cluster.launch({
+    concurrency: Cluster.CONCURRENCY_CONTEXT,
+    maxConcurrency: Object.entries(hotelOTAEntityObject).length,
+    timeout: 120_000,
+    puppeteerOptions: {
+      headless: true, // Does not show browser if true
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    },
   });
 
-  console.log('entered getCrawlingData');
+  cluster.on('taskFailed', (error: Error, data: any) => {
+    console.error(`Error crawling ${data}: ${error.message}`);
+  });
 
-  const fetchData = async (url: string, otaName: string, key: string) => {
-    console.log('entered fetchData');
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
+  await cluster.task(
+    async ({ page, data }: { page: typeof Page; data: any }) => {
+      await page.goto(data.url, { waitUntil: 'networkidle2', timeout: 0 });
 
-    try {
-      const cheapestRoomType = await page.$eval(
-        `.${hotelOTADataElementClassNameObject[otaName][0]}`,
-        (el: any) => el.textContent
-      );
+      try {
+        const cheapestRoomType = await page.$eval(
+          `.${hotelOTADataElementClassNameObject[data.otaName][0]}`,
+          (el: any) => el.textContent
+        );
 
-      const cheapestRoomPrice = await page.$eval(
-        `.${hotelOTADataElementClassNameObject[otaName][1]}`,
-        (el: any) => el.textContent
-      );
+        const cheapestRoomPrice = await page.$eval(
+          `.${hotelOTADataElementClassNameObject[data.otaName][1]}`,
+          (el: any) => el.textContent
+        );
 
-      console.log('entered try fetch');
-      console.log(url);
-
-      await page.close();
-      return {
-        hotelName: key,
-        otaName: otaName,
-        roomType: cheapestRoomType,
-        roomPrice: cheapestRoomPrice,
-      };
-    } catch (error) {
-      await page.close();
-      console.error(error);
-      return {
-        hotelName: key,
-        otaName: otaName,
-        roomType: '전객실 마감',
-        roomPrice: `참고링크 ${url}`,
-      };
+        return {
+          hotelName: data.hotelName,
+          otaName: data.otaName,
+          roomType: cheapestRoomType,
+          roomPrice: cheapestRoomPrice,
+        };
+      } catch (error) {
+        return {
+          hotelName: data.hotelName,
+          otaName: data.otaName,
+          roomType: '전객실 마감',
+          roomPrice: `참고링크 ${data.url}`,
+        };
+      }
     }
-  };
+  );
 
   let otaUrlArray = [];
 
@@ -75,14 +76,21 @@ async function getCrawlingData(request: any, response: any) {
     );
   }
 
-  const totalPromise = otaUrlArray.map((url) =>
-    fetchData(url[0], url[1], url[2])
+  const testPromise = await otaUrlArray.map((element) =>
+    cluster.execute({
+      url: element[0],
+      otaName: element[1],
+      hotelName: element[2],
+    })
   );
-  const totalData = await Promise.all(totalPromise);
 
-  console.log(totalData);
+  const testData = await Promise.all(testPromise);
 
-  response.status(200).send(totalData);
+  await cluster.idle();
+  await cluster.close();
+
+  console.log(testData);
+  response.status(200).send(testData);
 }
 
 module.exports = {

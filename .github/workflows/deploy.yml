@@ -2,7 +2,7 @@ name: OTACrawler-api EB Docker CI/CD
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   build:
@@ -26,8 +26,8 @@ jobs:
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name: OTACrawler-api
-          environment_name: OTACrawler-api-env
+          application_name: otacrawler-api
+          environment_name: Otacrawlerapi-env
           version_label: OTACrawler-api-${{ steps.timestamp.outputs.date }}
           region: ${{ secrets.AWS_REGION }}
           deployment_package: deploy.zip
