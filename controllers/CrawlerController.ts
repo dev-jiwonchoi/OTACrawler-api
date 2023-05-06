@@ -21,7 +21,7 @@ async function getCrawlingData(request: any, response: any) {
     maxConcurrency: Object.entries(hotelOTAEntityObject).length,
     timeout: 120_000,
     puppeteerOptions: {
-      headless: true, // Does not show browser if true
+      headless: 'new', // Does not show browser if true - 'new' is recommended
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     },
   });
@@ -32,6 +32,9 @@ async function getCrawlingData(request: any, response: any) {
 
   await cluster.task(
     async ({ page, data }: { page: typeof Page; data: any }) => {
+      await page.setUserAgent(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
+      );
       await page.goto(data.url, { waitUntil: 'networkidle2', timeout: 0 });
 
       try {
@@ -50,13 +53,15 @@ async function getCrawlingData(request: any, response: any) {
           otaName: data.otaName,
           roomType: cheapestRoomType,
           roomPrice: cheapestRoomPrice,
+          referenceLink: data.url,
         };
       } catch (error) {
         return {
           hotelName: data.hotelName,
           otaName: data.otaName,
           roomType: '전객실 마감',
-          roomPrice: `참고링크 ${data.url}`,
+          roomPrice: '',
+          referenceLink: data.url,
         };
       }
     }
